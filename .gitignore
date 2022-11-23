@@ -5,3 +5,5 @@ ckpts
 data
 nle_data
 pretrained_models
+generated
+.ipynb_checkpoints

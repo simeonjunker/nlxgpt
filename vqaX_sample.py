@@ -182,16 +182,27 @@ def main(args):
         args.ckpt_path, args.load_from_epoch, args.device)
     print("Model Setup Ready...")
 
-    # TODO add greyscale
-    img_transform = transforms.Compose([transforms.Resize((args.img_size, args.img_size)),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(
-                                            mean=[0.485, 0.456, 0.406],
-                                            std=[0.229, 0.224, 0.225])
-                                        ])
+    if args.greyscale: 
+        print('sampling from greyscale images')
+        img_transform = transforms.Compose([transforms.Resize((args.img_size, args.img_size)),
+                                            transforms.Grayscale(num_output_channels=3), # transform to grayscale
+                                            transforms.ToTensor(),
+                                            transforms.Normalize(
+                                                mean=[0.485, 0.456, 0.406],
+                                                std=[0.229, 0.224, 0.225])
+                                            ])
 
-    test_dataset = VQAXEvalDataset(path=args.nle_data_test_path,
-                                   # change to args.nle_data_val_path for val set
+    else: 
+        print('sampling from color images')
+        img_transform = transforms.Compose([transforms.Resize((args.img_size, args.img_size)),
+                                            transforms.ToTensor(),
+                                            transforms.Normalize(
+                                                mean=[0.485, 0.456, 0.406],
+                                                std=[0.229, 0.224, 0.225])
+                                            ])
+
+    annot_path = args.nle_data_test_path if args.split == 'test' else args.nle_data_val_path
+    test_dataset = VQAXEvalDataset(path=annot_path,
                                    transform=img_transform,
                                    tokenizer=tokenizer,
                                    max_seq_len=args.max_seq_len,
@@ -205,15 +216,14 @@ def main(args):
     results_full, results_exp = sample_sequences(
         model, image_encoder, tokenizer, test_loader, args)
 
-    unf_resFileExp = args.caption_save_path + \
-        'unf_captions_exp_' + str(args.load_from_epoch) + '.json'
-    unf_resFileFull = args.caption_save_path + \
-        'unf_captions_full_' + str(args.load_from_epoch) + '.json'
+    colour_settings = '_greyscale' if args.greyscale else ''
+    unf_resFileExp = f'unf_captions_exp_{str(args.load_from_epoch)}_{args.split}{colour_settings}.json'
+    unf_resFileFull = f'unf_captions_full_{str(args.load_from_epoch)}_{args.split}{colour_settings}.json'
 
-    with open(unf_resFileExp, 'w') as w:
+    with open(osp.join(args.caption_save_path, unf_resFileExp), 'w') as w:
         json.dump(results_exp, w)
 
-    with open(unf_resFileFull, 'w') as w:
+    with open(osp.join(args.caption_save_path, unf_resFileFull), 'w') as w:
         json.dump(results_full, w)
 
 
@@ -229,7 +239,7 @@ if __name__ == '__main__':
     parser.add_argument('--ckpt_path',
                         default='ckpts/')
     parser.add_argument('--caption_save_path',
-                        default='cococaption/results/')
+                        default='generated/')
     parser.add_argument('--nle_data_test_path',
                         default='nle_data/VQA-X/vqaX_test.json')
     parser.add_argument('--nle_data_val_path',
@@ -239,7 +249,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_from_epoch',
                         default=11, type=int)
     parser.add_argument('--device',
-                        default='cuda' if torch.cuda.is_available() else 'cpu')
+                        default='cuda' if torch.cuda.is_available() else 'cpu', choices=['cuda', 'cpu'])
     parser.add_argument('--no_sample',
                         default=True, type=bool)
     parser.add_argument('--top_k',
@@ -248,6 +258,10 @@ if __name__ == '__main__':
                         default=0.9, type=float)
     parser.add_argument('--temperature',
                         default=1, type=int)
+    parser.add_argument('--split', 
+                        default='val', choices=['val', 'test'])
+    parser.add_argument('--greyscale',
+                        action='store_true', help='convert images into greyscale')
 
     args = parser.parse_args()
 
