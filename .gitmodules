@@ -1,0 +1,3 @@
+[submodule "cococaption"]
+	path = cococaption
+	url = https://github.com/daqingliu/coco-caption.git
