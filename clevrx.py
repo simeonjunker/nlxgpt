@@ -380,7 +380,7 @@ if __name__ == '__main__':
     accelerator = Accelerator()
     device = accelerator.device
 
-    finetune_pretrained = False   # if True, finetunes from the image captioning model
+    finetune_pretrained = True   # if True, finetunes from the image captioning model
     eval_batch_size = 1
     img_size = 224
     ckpt_path = 'ckpts/CLEVR-X/'
@@ -390,7 +390,7 @@ if __name__ == '__main__':
     nle_data_train_path = 'nle_data/CLEVR-X/clevrX_train.json'
     nle_data_test_path = 'nle_data/CLEVR-X/clevrX_test.json'
     nle_data_val_path = 'nle_data/CLEVR-X/clevrX_val.json'
-    img_dir = '/home/simeon/Dokumente/Datasets/CLEVR/images'
+    img_dir = 'CLEVR_v1.0/images'
     max_seq_len = 40
     load_from_epoch = None
     no_sample = True
