@@ -5,3 +5,6 @@ data
 nle_data
 pretrained_model
 .ipynb_checkpoints
+bash
+sync*.sh
+todo.md

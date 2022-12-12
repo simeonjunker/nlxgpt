@@ -16,6 +16,8 @@ from models.gpt import GPT2LMHeadModel
 from models.clip_vit import ImageEncoder
 from utils.eval_utils import top_filtering
 from utils import data_utils
+import argparse
+from os import getcwd
 
 
 def change_requires_grad(model, req_grad):
@@ -74,6 +76,8 @@ def save_checkpoint(
            'optimizer_state_dict': optimizer.state_dict(),
            'scheduler': scheduler.state_dict(),
            **kwargs}
+
+    print(f'save model checkpoint to {ckpt_path + filename}')
 
     accelerator.save(opt, ckpt_path + filename)
 
@@ -278,7 +282,7 @@ class CLEVRXEvalDataset(Dataset):
         return len(self.ids_list)
 
 
-def sample_sequences(model, tokenizer, loader):
+def sample_sequences(model, tokenizer, loader, limit=None):
 
     model.eval()
     results_exp = []
@@ -290,6 +294,10 @@ def sample_sequences(model, tokenizer, loader):
     max_len = 20
 
     for i, batch in enumerate(loader):
+
+        if limit:
+            if i == limit:
+                break
 
         current_output = []
         batch = tuple(input_tensor.to(device) for input_tensor in batch)
@@ -377,32 +385,69 @@ def get_optimizer(model, learning_rate):
 
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--finetune_pretrained', default=True)
+    parser.add_argument('--eval_batch_size', default=1, type=int)
+    parser.add_argument('--img_size', default=224, type=int)
+    parser.add_argument('--ckpt_path', default='ckpts/CLEVR-X/')
+    parser.add_argument('--caption_save_path', default='cococaption/results/')
+    parser.add_argument('--annFileExp', default='cococaption/annotations/clevrX_val_annot_exp.json')
+    parser.add_argument('--annFileFull', default='cococaption/annotations/clevrX_val_annot_full.json')
+    parser.add_argument('--nle_data_train_path', default='nle_data/CLEVR-X/clevrX_train.json')
+    parser.add_argument('--nle_data_test_path', default='nle_data/CLEVR-X/clevrX_test.json')
+    parser.add_argument('--nle_data_val_path', default='nle_data/CLEVR-X/clevrX_val.json')
+    parser.add_argument('--img_dir', default='/home/public/corpora/CLEVR/CLEVR_v1.0/images')
+    parser.add_argument('--max_seq_len', default=40, type=int)
+    parser.add_argument('--load_from_epoch', default=None, type=int)
+    parser.add_argument('--no_sample', default=True, type=bool)
+    parser.add_argument('--top_k', default=0, type=int)
+    parser.add_argument('--top_p', default=0.9, type=float)
+    parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--num_train_epochs', default=30, type=int)
+    parser.add_argument('--weight_decay', default=0, type=float)
+    parser.add_argument('--gradient_accumulation_steps', default=1, type=int)
+    parser.add_argument('--start_epoch', default=0, type=int)
+    parser.add_argument('--temperature', default=1, type=float)
+    parser.add_argument('--limit', default=None, type=int)
+
+    args = parser.parse_args()
+
+    print('Train settings:')
+    print(args)
+    print(f'working directory: {getcwd()}')
+    print(f'CUDA available: {torch.cuda.is_available()}')
+
     accelerator = Accelerator()
     device = accelerator.device
 
-    finetune_pretrained = True   # if True, finetunes from the image captioning model
-    eval_batch_size = 1
-    img_size = 224
-    ckpt_path = 'ckpts/CLEVR-X/'
-    caption_save_path = 'cococaption/results/'
-    annFileExp = 'cococaption/annotations/clevrX_val_annot_exp.json'
-    annFileFull = 'cococaption/annotations/clevrX_val_annot_full.json'
-    nle_data_train_path = 'nle_data/CLEVR-X/clevrX_train.json'
-    nle_data_test_path = 'nle_data/CLEVR-X/clevrX_test.json'
-    nle_data_val_path = 'nle_data/CLEVR-X/clevrX_val.json'
-    img_dir = 'CLEVR_v1.0/images'
-    max_seq_len = 40
-    load_from_epoch = None
-    no_sample = True
-    top_k = 0
-    top_p = 0.9
-    batch_size = 32   # per GPU
-    num_train_epochs = 30
-    weight_decay = 0
+    print(f'Training on device: {device}')
+
+    finetune_pretrained = args.finetune_pretrained
+    eval_batch_size = args.eval_batch_size
+    img_size = args.img_size
+    ckpt_path = args.ckpt_path
+    caption_save_path = args.caption_save_path
+    annFileExp = args.annFileExp
+    annFileFull = args.annFileFull
+    nle_data_train_path = args.nle_data_train_path
+    nle_data_test_path = args.nle_data_test_path
+    nle_data_val_path = args.nle_data_val_path
+    img_dir = args.img_dir
+    max_seq_len = args.max_seq_len
+    load_from_epoch = args.load_from_epoch
+    no_sample = args.no_sample
+    top_k = args.top_k
+    top_p = args.top_p
+    batch_size = args.batch_size
+    num_train_epochs = args.num_train_epochs
+    weight_decay = args.weight_decay
+    gradient_accumulation_steps = args.gradient_accumulation_steps
+    start_epoch = args.start_epoch
+    temperature = args.temperature
+    limit = args.limit
+    
     learning_rate = 2e-5 if not finetune_pretrained else 1e-5
-    gradient_accumulation_steps = 1
-    start_epoch = 0
-    temperature = 1
 
     image_encoder = ImageEncoder(device).to(device)
     change_requires_grad(image_encoder, False)
@@ -492,6 +537,10 @@ if __name__ == '__main__':
 
         for step, batch in enumerate(train_loader):
 
+            if limit:
+                if step == limit:
+                    break
+
             batch = tuple(input_tensor.to(device) for input_tensor in batch)
             img, _, input_ids, labels, segment_ids = batch
 
@@ -533,21 +582,23 @@ if __name__ == '__main__':
         if accelerator.is_main_process:
 
             results_full, results_exp = sample_sequences(
-                unwrapped_model, tokenizer, val_loader)
+                unwrapped_model, tokenizer, val_loader, limit=limit)
 
             resFileExp = caption_save_path + \
-                'captions_exp_' + str(epoch) + '.json'
+                'clevrx_captions_exp_' + str(epoch) + '.json'
             unf_resFileExp = caption_save_path + \
-                'unf_captions_exp_' + str(epoch) + '.json'
+                'clevrx_unf_captions_exp_' + str(epoch) + '.json'
             unf_resFileFull = caption_save_path + \
-                'unf_captions_full_' + str(epoch) + '.json'
+                'clevrx_unf_captions_full_' + str(epoch) + '.json'
             save_scores_pathExp = caption_save_path + \
-                'scores_exp_' + str(epoch) + '.json'
+                'clevrx_scores_exp_' + str(epoch) + '.json'
 
             with open(unf_resFileExp, 'w') as w:
+                print(f'write explanations to {unf_resFileExp}')
                 json.dump(results_exp, w)
 
             with open(unf_resFileFull, 'w') as w:
+                print(f'write full sequences to {unf_resFileFull}')
                 json.dump(results_full, w)
 
             # unfiltered results
