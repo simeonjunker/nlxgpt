@@ -18,6 +18,7 @@ from utils.eval_utils import top_filtering
 from utils import data_utils
 import argparse
 from os import getcwd
+from time import gmtime, strftime
 
 
 def change_requires_grad(model, req_grad):
@@ -392,11 +393,11 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', default=224, type=int)
     parser.add_argument('--ckpt_path', default='ckpts/CLEVR-X/')
     parser.add_argument('--caption_save_path', default='cococaption/results/')
-    parser.add_argument('--annFileExp', default='cococaption/annotations/clevrX_val_annot_exp.json')
-    parser.add_argument('--annFileFull', default='cococaption/annotations/clevrX_val_annot_full.json')
+    parser.add_argument('--annFileExp', default='cococaption/annotations/clevrX_dev_annot_exp.json')
+    parser.add_argument('--annFileFull', default='cococaption/annotations/clevrX_dev_annot_full.json')
     parser.add_argument('--nle_data_train_path', default='nle_data/CLEVR-X/clevrX_train.json')
     parser.add_argument('--nle_data_test_path', default='nle_data/CLEVR-X/clevrX_test.json')
-    parser.add_argument('--nle_data_val_path', default='nle_data/CLEVR-X/clevrX_val.json')
+    parser.add_argument('--nle_data_val_path', default='nle_data/CLEVR-X/clevrX_dev.json')
     parser.add_argument('--img_dir', default='/home/public/corpora/CLEVR/CLEVR_v1.0/images')
     parser.add_argument('--max_seq_len', default=40, type=int)
     parser.add_argument('--load_from_epoch', default=None, type=int)
@@ -410,6 +411,7 @@ if __name__ == '__main__':
     parser.add_argument('--start_epoch', default=0, type=int)
     parser.add_argument('--temperature', default=1, type=float)
     parser.add_argument('--limit', default=None, type=int)
+    parser.add_argument('--print_step', default=10, type=int)
 
     args = parser.parse_args()
 
@@ -446,6 +448,7 @@ if __name__ == '__main__':
     start_epoch = args.start_epoch
     temperature = args.temperature
     limit = args.limit
+    print_step = args.print_step
     
     learning_rate = 2e-5 if not finetune_pretrained else 1e-5
 
@@ -566,12 +569,12 @@ if __name__ == '__main__':
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
-                accelerator.print("\rEpoch {} / {}, Iter {} / {}, Loss: {:.3f}".format(epoch,
-                                                                                       num_train_epochs,
-                                                                                       step, len(
-                                                                                           train_loader),
-                                                                                       accum_loss),
-                                  end='          ')
+                if step % print_step == 0:
+                    current_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+                    accelerator.print(f"""
+                        \r{current_time} --- Epoch {epoch} / {num_train_epochs}, Iter {step} / {len(train_loader)}, Loss: {round(accum_loss, 3)}
+                        """.strip()
+                        )
                 accum_loss = 0
 
         accelerator.wait_for_everyone()
