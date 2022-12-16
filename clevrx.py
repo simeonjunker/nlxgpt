@@ -396,7 +396,6 @@ if __name__ == '__main__':
     parser.add_argument('--annFileExp', default='cococaption/annotations/clevrX_dev_annot_exp.json')
     parser.add_argument('--annFileFull', default='cococaption/annotations/clevrX_dev_annot_full.json')
     parser.add_argument('--nle_data_train_path', default='nle_data/CLEVR-X/clevrX_train.json')
-    parser.add_argument('--nle_data_test_path', default='nle_data/CLEVR-X/clevrX_test.json')
     parser.add_argument('--nle_data_val_path', default='nle_data/CLEVR-X/clevrX_dev.json')
     parser.add_argument('--img_dir', default='/home/public/corpora/CLEVR/CLEVR_v1.0/images')
     parser.add_argument('--max_seq_len', default=40, type=int)
@@ -433,7 +432,6 @@ if __name__ == '__main__':
     annFileExp = args.annFileExp
     annFileFull = args.annFileFull
     nle_data_train_path = args.nle_data_train_path
-    nle_data_test_path = args.nle_data_test_path
     nle_data_val_path = args.nle_data_val_path
     img_dir = args.img_dir
     max_seq_len = args.max_seq_len
