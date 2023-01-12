@@ -14,6 +14,7 @@ import os
 import os.path as osp
 from utils.eval_utils import top_filtering
 import re
+from tqdm import tqdm
 
 
 class CLEVRXEvalDataset(Dataset):
@@ -95,7 +96,7 @@ def sample_sequences(model, image_encoder, tokenizer, loader, args):
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
     because_token = tokenizer.convert_tokens_to_ids('Ġbecause')
 
-    for i, batch in enumerate(loader):
+    for i, batch in tqdm(enumerate(loader), total=len(loader)):
 
         current_output = []
         batch = tuple(input_tensor.to(args.device) for input_tensor in batch)
@@ -164,8 +165,6 @@ def sample_sequences(model, image_encoder, tokenizer, loader, args):
 
         results_exp.append(
             {"image_id": img_id.item(), "caption": cut_decoded_sequences})
-        print("\rEvaluation: Finished {}/{}".format(i,
-              len(loader)), end='          ')
 
     return results_full, results_exp
 
@@ -201,7 +200,6 @@ def main(args):
                                                 std=[0.229, 0.224, 0.225])
                                             ])
 
-    print(f'sampling answers and explanations for {args.split} split')
     annot_path = args.nle_data_test_path if args.split == 'test' else args.nle_data_val_path
     print(f'annotation path: {annot_path}')
 
@@ -267,5 +265,7 @@ if __name__ == '__main__':
                         action='store_true', help='convert images into greyscale')
 
     args = parser.parse_args()
+
+    print(args)
 
     main(args)
