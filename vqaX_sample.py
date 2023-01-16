@@ -217,8 +217,8 @@ def main(args):
         model, image_encoder, tokenizer, test_loader, args)
 
     colour_settings = '_greyscale' if args.greyscale else ''
-    unf_resFileExp = f'unf_captions_exp_{str(args.load_from_epoch)}_{args.split}{colour_settings}.json'
-    unf_resFileFull = f'unf_captions_full_{str(args.load_from_epoch)}_{args.split}{colour_settings}.json'
+    unf_resFileExp = f'vqax_unf_captions_exp_{str(args.load_from_epoch)}_{args.split}{colour_settings}.json'
+    unf_resFileFull = f'vqax_unf_captions_full_{str(args.load_from_epoch)}_{args.split}{colour_settings}.json'
 
     with open(osp.join(args.caption_save_path, unf_resFileExp), 'w') as w:
         json.dump(results_exp, w)
