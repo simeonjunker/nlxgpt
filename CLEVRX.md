@@ -1,0 +1,3 @@
+- run utils/prepare_clevrx_data.py to prepare clevrx data
+- Download pretrained model from [here](https://github.com/fawazsammani/nlxgpt)
+- run clevrx.py
