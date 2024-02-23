@@ -3,18 +3,19 @@ import torch.nn.functional as F
 import torch.utils.data
 import torchvision.transforms as transforms
 from transformers import GPT2Tokenizer, AutoConfig
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup  # ,  AdamW
+from torch.optim import AdamW
 import json
 from cococaption.pycocotools.coco import COCO
 from cococaption.pycocoevalcap.eval import COCOEvalCap
 from accelerate import Accelerator
 from models.gpt import GPT2LMHeadModel
 from models.clip_vit import ImageEncoder
-from utils.eval_utils import top_filtering
+from utils.eval_utils import top_filtering, ScoreTracker
 from utils.clevrx import CLEVRXTrainDataset, CLEVRXEvalDataset
 import argparse
 from os import getcwd
-from time import gmtime, strftime
+from tqdm import tqdm
 
 
 def change_requires_grad(model, req_grad):
@@ -43,8 +44,7 @@ def load_checkpoint(ckpt_path, epoch, learning_rate):
     return tokenizer, model, optimizer, scheduler_dic, start_epoch
 
 
-def load_pretrained():
-    
+def load_pretrained():  
     model_path = 'pretrained_model/model1/pretrain_model'
     tokenizer_path = 'pretrained_model/model1/pretrain_tokenizer_0'
     tokenizer = GPT2Tokenizer.from_pretrained(
@@ -56,27 +56,30 @@ def load_pretrained():
 
 def save_checkpoint(
         epoch, unwrapped_model, optimizer,
-        tokenizer, scheduler, ckpt_path, **kwargs):
+        tokenizer, scheduler, args, **kwargs):
 
-    model_name = 'nle_model_{}'.format(str(epoch))
-    tokenizer_name = 'nle_gpt2_tokenizer_{}'.format(str(epoch))
-    filename = 'ckpt_stats_' + str(epoch) + '.tar'
+    epoch_str = str(epoch).rjust(2, '0')
+    greyscale_str = '_greyscale' if args.greyscale else ''
+    model_name = f'clevrx_nle_model_{epoch_str}{greyscale_str}'
+    tokenizer_name = f'clevrx_nle_gpt2_tokenizer_{epoch_str}{greyscale_str}'
+    filename = f'clevrx_ckpt_stats_{epoch_str}{greyscale_str}.tar'
 
     if epoch == 0:
         tokenizer.save_pretrained(
-            ckpt_path + tokenizer_name)   # save tokenizer
+            args.ckpt_path + tokenizer_name)   # save tokenizer
 
     unwrapped_model.save_pretrained(
-        ckpt_path + model_name, save_function=accelerator.save)
+        args.ckpt_path + model_name, save_function=accelerator.save)
 
     opt = {'epoch': epoch,
            'optimizer_state_dict': optimizer.state_dict(),
            'scheduler': scheduler.state_dict(),
+           'args': args,
            **kwargs}
 
-    print(f'save model checkpoint to {ckpt_path + filename}')
+    print(f'save model checkpoint to {args.ckpt_path + filename}')
 
-    accelerator.save(opt, ckpt_path + filename)
+    accelerator.save(opt, args.ckpt_path + filename)
 
 
 def filter_and_get_scores(
@@ -113,9 +116,13 @@ def filter_and_get_scores(
     cocoEval = COCOEvalCap(coco, cocoRes)
     cocoEval.params['image_id'] = cocoRes.getImgIds()
     cocoEval.evaluate()
+    
+    scores = cocoEval.eval
 
     with open(save_scores_pathExp, 'w') as w:
-        json.dump(cocoEval.eval, w)
+        json.dump(scores, w)
+        
+    return scores
 
 
 def sample_sequences(model, image_encoder, tokenizer, loader, args, limit=None):
@@ -220,7 +227,7 @@ def get_optimizer(model, learning_rate, weight_decay):
 
 
 def main(args):
-    
+
     learning_rate = 2e-5 if not args.finetune_pretrained else 1e-5
 
     image_encoder = ImageEncoder(device).to(device)
@@ -261,15 +268,26 @@ def main(args):
             model = model.to(device)
             optimizer = get_optimizer(model, learning_rate)
         start_epoch = 0
-        
+
     print("Model Setup Ready...")
 
-    img_transform = transforms.Compose([transforms.Resize((args.img_size, args.img_size)),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(
-                                            mean=[0.485, 0.456, 0.406],
-                                            std=[0.229, 0.224, 0.225])]
-                                       )
+    transforms_list = [
+        transforms.Resize((args.img_size, args.img_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], 
+            std=[0.229, 0.224, 0.225]),
+    ]
+
+    if args.greyscale:
+        transforms_list.insert(
+            1, transforms.Grayscale(num_output_channels=3)  # transform to grayscale
+        )
+
+    img_transform = transforms.Compose(transforms_list)
+
+    print(f'convert images to greyscale: {args.greyscale}')
+    print(f'transformations: {img_transform}')
 
     train_dataset = CLEVRXTrainDataset(path=args.nle_data_train_path,
                                        img_dir=args.img_dir,
@@ -296,6 +314,8 @@ def main(args):
     model, optimizer, train_loader = accelerator.prepare(
         model, optimizer, train_loader)
 
+    score_tracker = ScoreTracker(stop_after_epochs=args.early_stopping_epochs)
+
     t_total = (len(train_loader) // args.gradient_accumulation_steps) * \
         args.num_train_epochs
     warmup_steps = 0   # 0.10 * t_total
@@ -310,7 +330,7 @@ def main(args):
         model.train()
         accum_loss = 0
 
-        for step, batch in enumerate(train_loader):
+        for step, batch in tqdm(enumerate(train_loader), total=len(train_loader)):
 
             if args.limit:
                 if step == args.limit:
@@ -341,18 +361,10 @@ def main(args):
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
-                if step % args.print_step == 0:
-                    current_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-                    accelerator.print(f"""
-                        \r{current_time} --- Epoch {epoch} / {args.num_train_epochs}, Iter {step} / {len(train_loader)}, Loss: {round(accum_loss, 3)}
-                        """.strip()
-                    )
                 accum_loss = 0
 
         accelerator.wait_for_everyone()
         unwrapped_model = accelerator.unwrap_model(model)
-        save_checkpoint(epoch, unwrapped_model, optimizer,
-                        tokenizer, scheduler, args.ckpt_path)
 
         if accelerator.is_main_process:
 
@@ -380,14 +392,30 @@ def main(args):
             # get_scores(annFileExp, unf_resFileExp, save_scores_pathExp)
 
             # filtered results
-            filter_and_get_scores(
+            scores = filter_and_get_scores(
                 args.nle_data_val_path, args.annFileExp, resFileExp, save_scores_pathExp, results_full, results_exp)
+
+            cider_score = scores['CIDEr']
+            score_tracker(cider_score)
+            score_tracker.print_summary()
+
+        if isinstance(args.save_every, int):
+            save_model = (epoch % args.save_every == 0 or epoch == args.num_train_epochs - 1)
+        else:
+            save_model = score_tracker.counter == 0
+            if not save_model:
+                print('non maximum score -- do not save model weights')
+
+        if save_model:
+            print('save model')                
+            save_checkpoint(epoch, unwrapped_model, optimizer,
+                            tokenizer, scheduler, args)
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    
+
     parser.add_argument('--finetune_pretrained', default=True)
     parser.add_argument('--eval_batch_size', default=1, type=int)
     parser.add_argument('--img_size', default=224, type=int)
@@ -411,6 +439,9 @@ if __name__ == '__main__':
     parser.add_argument('--temperature', default=1, type=float)
     parser.add_argument('--limit', default=None, type=int)
     parser.add_argument('--print_step', default=500, type=int)
+    parser.add_argument('--early_stopping_epochs', default=2, type=int)
+    parser.add_argument('--save_every', default=False, type=int)
+    parser.add_argument('--greyscale', action='store_true')
 
     args = parser.parse_args()
 
