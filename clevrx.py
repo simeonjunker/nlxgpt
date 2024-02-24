@@ -14,6 +14,7 @@ from models.clip_vit import ImageEncoder
 from utils.eval_utils import top_filtering, ScoreTracker
 from utils.clevrx import CLEVRXTrainDataset, CLEVRXEvalDataset
 import argparse
+import os.path as osp
 from os import getcwd
 from tqdm import tqdm
 
@@ -371,6 +372,9 @@ def main(args):
             results_full, results_exp = sample_sequences(
                 unwrapped_model, image_encoder, tokenizer, val_loader, args, limit=args.limit)
 
+            if not osp.isdir(args.caption_save_path):
+                osp.mkdir(args.caption_save_path)
+
             resFileExp = args.caption_save_path + \
                 'clevrx_captions_exp_' + str(epoch) + '.json'
             unf_resFileExp = args.caption_save_path + \
@@ -399,7 +403,7 @@ def main(args):
             score_tracker(cider_score)
             score_tracker.print_summary()
 
-        if isinstance(args.save_every, int):
+        if args.save_every >= 1:
             save_model = (epoch % args.save_every == 0 or epoch == args.num_train_epochs - 1)
         else:
             save_model = score_tracker.counter == 0
@@ -440,7 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('--limit', default=None, type=int)
     parser.add_argument('--print_step', default=500, type=int)
     parser.add_argument('--early_stopping_epochs', default=2, type=int)
-    parser.add_argument('--save_every', default=False, type=int)
+    parser.add_argument('--save_every', default=-1, type=int)
     parser.add_argument('--greyscale', action='store_true')
 
     args = parser.parse_args()
