@@ -61,13 +61,13 @@ def save_checkpoint(
         tokenizer, scheduler, args, **kwargs):
     
     epoch_str = str(epoch).rjust(2, '0')
-    greyscale_str = '_greyscale' if args.greyscale else ''
-    save_path = osp.join(args.ckpt_path, f'clevrx_ckpt_{epoch_str}{greyscale_str}')
-    model_name = f'clevrx_nle_model_{epoch_str}{greyscale_str}'
-    tokenizer_name = f'clevrx_nle_gpt2_tokenizer_{epoch_str}{greyscale_str}'
-    filename = f'clevrx_ckpt_stats_{epoch_str}{greyscale_str}.tar'
+    greyscale_str = 'greyscale_' if args.greyscale else ''
+    save_path = osp.join(args.ckpt_path, f'clevrx_{greyscale_str}{epoch_str}')
+    model_name = f'clevrx_nle_model_{greyscale_str}{epoch_str}'
+    tokenizer_name = f'clevrx_nle_gpt2_tokenizer_{greyscale_str}{epoch_str}'
+    filename = f'clevrx_ckpt_stats_{greyscale_str}{epoch_str}.tar'
     
-    os.mkdir(save_path)
+    os.makedirs(save_path)
 
     if epoch == 0:
         tokenizer.save_pretrained(
