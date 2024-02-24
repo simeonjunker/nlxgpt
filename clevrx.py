@@ -15,6 +15,7 @@ from utils.eval_utils import top_filtering, ScoreTracker
 from utils.clevrx import CLEVRXTrainDataset, CLEVRXEvalDataset
 import argparse
 import os.path as osp
+import os
 from os import getcwd
 from tqdm import tqdm
 
@@ -24,25 +25,25 @@ def change_requires_grad(model, req_grad):
         p.requires_grad = req_grad
 
 
-def load_checkpoint(ckpt_path, epoch, learning_rate):
+# def load_checkpoint(ckpt_path, epoch, learning_rate):
 
-    model_name = 'nle_model_{}'.format(str(epoch))
-    tokenizer_name = 'nle_gpt2_tokenizer_0'
-    filename = 'ckpt_stats_' + str(epoch) + '.tar'
+#     model_name = 'nle_model_{}'.format(str(epoch))
+#     tokenizer_name = 'nle_gpt2_tokenizer_0'
+#     filename = 'ckpt_stats_' + str(epoch) + '.tar'
 
-    tokenizer = GPT2Tokenizer.from_pretrained(
-        ckpt_path + tokenizer_name)        # load tokenizer
-    model = GPT2LMHeadModel.from_pretrained(
-        ckpt_path + model_name).to(device)   # load model with config
-    opt = torch.load(ckpt_path + filename)
-    optimizer = get_optimizer(model, learning_rate)
-    optimizer.load_state_dict(opt['optimizer_state_dict'])
-    start_epoch = opt['epoch'] + 1
-    scheduler_dic = opt['scheduler']
-    del opt
-    torch.cuda.empty_cache()
+#     tokenizer = GPT2Tokenizer.from_pretrained(
+#         ckpt_path + tokenizer_name)        # load tokenizer
+#     model = GPT2LMHeadModel.from_pretrained(
+#         ckpt_path + model_name).to(device)   # load model with config
+#     opt = torch.load(ckpt_path + filename)
+#     optimizer = get_optimizer(model, learning_rate)
+#     optimizer.load_state_dict(opt['optimizer_state_dict'])
+#     start_epoch = opt['epoch'] + 1
+#     scheduler_dic = opt['scheduler']
+#     del opt
+#     torch.cuda.empty_cache()
 
-    return tokenizer, model, optimizer, scheduler_dic, start_epoch
+#     return tokenizer, model, optimizer, scheduler_dic, start_epoch
 
 
 def load_pretrained():  
@@ -58,19 +59,22 @@ def load_pretrained():
 def save_checkpoint(
         epoch, unwrapped_model, optimizer,
         tokenizer, scheduler, args, **kwargs):
-
+    
     epoch_str = str(epoch).rjust(2, '0')
     greyscale_str = '_greyscale' if args.greyscale else ''
+    save_path = osp.join(args.ckpt_path, f'clevrx_ckpt_{epoch_str}{greyscale_str}')
     model_name = f'clevrx_nle_model_{epoch_str}{greyscale_str}'
     tokenizer_name = f'clevrx_nle_gpt2_tokenizer_{epoch_str}{greyscale_str}'
     filename = f'clevrx_ckpt_stats_{epoch_str}{greyscale_str}.tar'
+    
+    os.mkdir(save_path)
 
     if epoch == 0:
         tokenizer.save_pretrained(
-            args.ckpt_path + tokenizer_name)   # save tokenizer
+            osp.join(save_path, tokenizer_name))   # save tokenizer
 
     unwrapped_model.save_pretrained(
-        args.ckpt_path + model_name, save_function=accelerator.save)
+        osp.join(save_path, model_name), save_function=accelerator.save)
 
     opt = {'epoch': epoch,
            'optimizer_state_dict': optimizer.state_dict(),
@@ -80,7 +84,7 @@ def save_checkpoint(
 
     print(f'save model checkpoint to {args.ckpt_path + filename}')
 
-    accelerator.save(opt, args.ckpt_path + filename)
+    accelerator.save(opt, osp.join(save_path, filename))
 
 
 def filter_and_get_scores(
@@ -235,8 +239,9 @@ def main(args):
     change_requires_grad(image_encoder, False)
 
     if args.load_from_epoch is not None:
-        tokenizer, model, optimizer, scheduler_dic, start_epoch = load_checkpoint(
-            args.ckpt_path, args.load_from_epoch, learning_rate)
+        raise NotImplementedError
+        # tokenizer, model, optimizer, scheduler_dic, start_epoch = load_checkpoint(
+        #     args.ckpt_path, args.load_from_epoch, learning_rate)
 
     else:
 
