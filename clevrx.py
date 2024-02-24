@@ -379,15 +379,18 @@ def main(args):
 
             if not osp.isdir(args.caption_save_path):
                 osp.mkdir(args.caption_save_path)
+                
+            epoch_str = str(epoch).rjust(2, '0')
+            greyscale_str = 'greyscale_' if args.greyscale else ''
 
             resFileExp = args.caption_save_path + \
-                'clevrx_captions_exp_' + str(epoch) + '.json'
+                f'clevrx_captions_exp_{greyscale_str}{epoch_str}.json'
             unf_resFileExp = args.caption_save_path + \
-                'clevrx_unf_captions_exp_' + str(epoch) + '.json'
+                f'clevrx_unf_captions_exp_{greyscale_str}{epoch_str}.json'
             unf_resFileFull = args.caption_save_path + \
-                'clevrx_unf_captions_full_' + str(epoch) + '.json'
+                f'clevrx_unf_captions_full_{greyscale_str}{epoch_str}.json'
             save_scores_pathExp = args.caption_save_path + \
-                'clevrx_scores_exp_' + str(epoch) + '.json'
+                f'clevrx_scores_exp_{greyscale_str}{epoch_str}.json'
 
             with open(unf_resFileExp, 'w') as w:
                 print(f'write explanations to {unf_resFileExp}')
