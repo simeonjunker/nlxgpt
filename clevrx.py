@@ -18,6 +18,7 @@ import os.path as osp
 import os
 from os import getcwd
 from tqdm import tqdm
+import logging
 
 
 def change_requires_grad(model, req_grad):
@@ -67,7 +68,8 @@ def save_checkpoint(
     tokenizer_name = f'clevrx_nle_gpt2_tokenizer_{greyscale_str}{epoch_str}'
     filename = f'clevrx_ckpt_stats_{greyscale_str}{epoch_str}.tar'
     
-    os.makedirs(save_path)
+    if not os.path.isdir:
+        os.makedirs(save_path)
 
     if epoch == 0:
         tokenizer.save_pretrained(
@@ -232,6 +234,15 @@ def get_optimizer(model, learning_rate, weight_decay):
 
 
 def main(args):
+    
+    greyscale_str = '_greyscale' if args.greyscale else ''
+    log_path = osp.join(args.ckpt_path, f'train_progress_clevrx{greyscale_str}.log')
+    logging.basicConfig(
+        filename=log_path,
+        level=logging.INFO
+    )
+    print(f'write train log to {log_path}')
+    logging.info('Training Arguments: %s\n\n', vars(args))
 
     learning_rate = 2e-5 if not args.finetune_pretrained else 1e-5
 
@@ -335,6 +346,7 @@ def main(args):
 
         model.train()
         accum_loss = 0
+        accum_train_loss = 0
 
         for step, batch in tqdm(enumerate(train_loader), total=len(train_loader)):
 
@@ -362,12 +374,15 @@ def main(args):
             loss = loss / args.gradient_accumulation_steps
             accelerator.backward(loss)
             accum_loss += loss.item()
+            accum_train_loss += loss.item()
 
             if step % args.gradient_accumulation_steps == 0 or step == len(train_loader) - 1:
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
                 accum_loss = 0
+
+        logging.info(f'Train loss / epoch {epoch}: {accum_train_loss / len(train_loader)}')
 
         accelerator.wait_for_everyone()
         unwrapped_model = accelerator.unwrap_model(model)
@@ -408,6 +423,7 @@ def main(args):
                 args.nle_data_val_path, args.annFileExp, resFileExp, save_scores_pathExp, results_full, results_exp)
 
             cider_score = scores['CIDEr']
+            logging.info(f'CIDEr score / epoch {epoch}: {cider_score}')
             score_tracker(cider_score)
             score_tracker.print_summary()
 
@@ -466,5 +482,9 @@ if __name__ == '__main__':
     device = accelerator.device
 
     print(f'Training on device: {device}')
+    
+    if not osp.isdir(args.ckpt_path):
+        print(f'create checkpoint directory {args.ckpt_path}')
+        os.mkdir(args.ckpt_path)
 
     main(args)
