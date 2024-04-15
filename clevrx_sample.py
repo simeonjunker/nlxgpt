@@ -74,14 +74,17 @@ def change_requires_grad(model, req_grad):
     
 def load_trained(ckpt_path, epoch, device):
 
-    model_name = 'nle_model_{}'.format(str(epoch))
-    tokenizer_name = 'nle_gpt2_tokenizer_0'
-    filename = 'ckpt_stats_' + str(epoch) + '.tar'
+    epoch_str = str(epoch).rjust(2, '0')
 
-    tokenizer = GPT2Tokenizer.from_pretrained(
-        osp.join(ckpt_path, tokenizer_name))        # load tokenizer
-    model = GPT2LMHeadModel.from_pretrained(
-        osp.join(ckpt_path, model_name)).to(device)   # load model with config
+    model_name = 'clevrx_nle_model_{}'.format(epoch_str)
+    tokenizer_name = 'clevrx_nle_gpt2_tokenizer_00'
+    subdir = 'clevrx_{}'.format(epoch_str)
+    
+    tokenizer_path = osp.join(ckpt_path, 'clevrx_00', tokenizer_name)
+    model_path = osp.join(ckpt_path, subdir, model_name)
+
+    tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path)        # load tokenizer
+    model = GPT2LMHeadModel.from_pretrained(model_path).to(device)   # load model with config
 
     return tokenizer, model
 
@@ -179,7 +182,8 @@ def main(args):
 
     tokenizer, model = load_trained(
         args.ckpt_path, args.load_from_epoch, args.device)
-    print("Model Setup Ready...")
+    print("Model Setup Ready...") 
+    print(f'Running inference on {model.device}')
 
     if args.greyscale: 
         print('sampling from greyscale images')
